@@ -1,0 +1,772 @@
+---
+title: "Logistic Regression Assignment--Audit"
+author: "Saixiong Han (sah178)"
+date: "January 31, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Task: Analyze dataset analyze dataset audit.csv. The objective is to predict the binary (TARGET_Adjusted) and continuous (RISK_Adjustment) target variables.
+
+## 1. Identify and report response variable and predictor
+
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+audit<-read.csv("C:/Users/daisy/OneDrive/Study/DM/week3/audit.csv", header =                    TRUE, sep = ",",stringsAsFactors = TRUE)
+head(audit)
+```
+
+RISK_Adjustment and TARGET_Adjusted are the response variable. RISK_Adjustment is numeric, so we have to use linear and non-linear regression to predict it. While TARGET_Adjusted is binary, thus we have to use logistic regression to predict it.
+The rest predictors includes Age, Employment, Education, Marital, Occupation, Income, Gender, Deductions,Hours.
+
+## 2.Explore data and generate summary
+
+### -Data Preparation
+
+There are some missing value in the data and useless variable in the dataset. Before generate summary, we need to deal with the useless variables and missing value first.
+Since ID in the dataset is useless. we can delete this variable from dataset first.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+audit1<-audit[,2:12]
+dim(audit1)
+summary(audit1)
+```
+The summary shows Age, Income, Deductions, Hours, RISK_Adjustment are all numerical variables. Employment, Education, Marital, Occupation, Gerder and TARGET_Adjusted are categotical variables. In aqddition, there are about 200 missing value in Employment and Occupation. We can generate a new level for the misssing value in Employment and Occupation.
+
+### -Deal with missing data
+
+In order to know the distribution of missing data, the first thing I would like yo do is spelling the pattern of missing data.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(VIM)
+library(mice)
+aggr(audit)
+```
+The graph shows Employment has 100 missing value and Occupation has 101 missing value. Since the missing value are shown as NA, we can add a new level for the missing value since we don't know the employment or occupation situation. In Employment, we add "NewEmploy" as a new level, while in Occupation, we add "NewOccupy" as a new level.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE,results='hide'}
+audit2 = audit1
+
+levels(audit2$Employment) = c(levels(audit2$Employment), "NewEmploy")
+audit2$Employment[is.na(audit2$Employment)] = "NewEmploy"
+summary(audit2$Employment)
+
+levels(audit2$Occupation) = c(levels(audit2$Occupation), "NewOccupy")
+audit2$Occupation[is.na(audit2$Occupation)] = "NewOccupy"
+summary(audit2$Occupation)
+```
+
+###a--generate the summary table
+
+For each numeric variable, list:name, mean, median, 1st quartile, 3rd quartile, standard deviation. From the summary we can know, Age, Income, Deductions, Hours, RISK_Adjustment are numerical variables. The summary table is as following.
+
+```{r echo=TRUE,message=FALSE, warning=FALSE,tidy=TRUE, fig.height=9,fig.width=10}
+library(knitr)
+Age = c(summary(audit2$Age), sd(audit2$Age))
+Income = c(summary(audit2$Income), sd(audit2$Income))
+Deductions = c(summary(audit2$Deductions), sd(audit2$Deductions))
+Hours = c(summary(audit2$Hours), sd(audit2$Hours))
+RISK_Adjustment = c(summary(audit2$RISK_Adjustment),sd(audit2$RISK_Adjustment))
+result = rbind(Age, Income, Deductions, Hours, RISK_Adjustment)
+result = as.data.frame(result)
+colnames(result)[7] = c("sd")
+kable(result, caption = 'Table 1: Summary of attributes')
+```
+
+###b--plot density distribution for for numeric variables
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(cowplot)
+ggplot(data = audit2, aes(x = Age)) +
+  geom_density()
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(cowplot)
+ggplot(data = audit2, aes(x = Income)) +
+  geom_density()
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(cowplot)
+ggplot(data = audit2, aes(x = Deductions)) +
+  geom_density()
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(cowplot)
+ggplot(data = audit2, aes(x = Hours)) +
+  geom_density()
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(cowplot)
+ggplot(data = audit2, aes(x = RISK_Adjustment)) +
+  geom_density()
+```
+
+From the graphs we can see, Except the hours, all the other numeric attributes are skewed to the right. We can use some other methods to test normality.
+We can test the skewness of these numerical variables as following.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(e1071)
+skewness(audit2$Age)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+skewness(audit2$Income)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+skewness(audit2$Deductions)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+skewness(audit2$RISK_Adjustment)
+```
+
+The skewness of Income, Deductions and RISK_Adjustment are al larger than one, which means they are highly skewed to the right, especially Deductions and RISK_Adjustment. ONly age's skewness is less than 0.5, which is with tolerance.
+
+Perform Shapiro-Wilktest, and reject the null hypothesis (normality) if p-value is significant.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+shapiro.test(audit2$Age)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+shapiro.test(audit2$Income)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+shapiro.test(audit2$Deductions)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+shapiro.test(audit2$RISK_Adjustment)
+```
+
+If we set the significance level as 0.05, we can see that all p-values are significant (less than 0.05), which implies that we can reject the null hypothesis and claim that all attributes except hours are not normal distribution.
+
+Draw a normal probability plot (q-q plot), and check if the distribution is approximately forms a straight line.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+qqnorm(audit2$Age)
+qqline(audit2$Age)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+qqnorm(audit2$Income)
+qqline(audit2$Income)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+qqnorm(audit2$Deductions)
+qqline(audit2$Deductions)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+qqnorm(audit2$RISK_Adjustment)
+qqline(audit2$RISK_Adjustment)
+```
+
+From q-q plots, we can see that the points for Deductions and RISK_Adjustment do not fall on the straight line which clearly voilate the normality assumption.They are skewed to the right.
+
+### - For each numerical predictor, describe its relationship with the response variable through correlation and scatterplot.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(car)
+dt = audit2[,c('Age','Income','Hours','Deductions','RISK_Adjustment')]
+cor(dt)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+scatterplotMatrix(dt, spread = FALSE, lty.smooth = 2, main = 'Scatter Plot Matrix')
+```
+
+By examining the correlations (bottom-left four values) and scatterplots (bottom-left four figures) between predictors and response, we can see that RISK_Adjustment doesn't show very obvious correlation with the other predictors. We might need to combine these feature so that they can be someway related.
+
+### c--For each categorical predictor, generate the conditional histogram plot of response variable.
+
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+ggplot(audit2, aes(x=RISK_Adjustment, fill=Employment))+
+  geom_histogram(binwidth = 3000)
+```
+
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+ggplot(audit2, aes(x=RISK_Adjustment, fill=Education))+
+  geom_histogram(binwidth = 3000)
+```
+
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+ggplot(audit2, aes(x=RISK_Adjustment, fill=Marital))+
+  geom_histogram(binwidth = 3000)
+```
+
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+ggplot(audit2, aes(x=RISK_Adjustment, fill=Occupation))+
+  geom_histogram(binwidth = 3000)
+```
+
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+ggplot(audit2, aes(x=RISK_Adjustment, fill=Gender))+
+  geom_histogram(binwidth = 3000)
+```
+
+## 3--Apply logistic regression analysis to predict TARGET_Adjusted. Evaluate the models through cross-validation and on holdout samples.
+
+### a--Implement logistic regression
+
+Implement a 10-fold cross-validation scheme by splitting the data into training and testing sets. Use the training set to train a logistic regression model to predict the response variable. Examine the performance of different models by varing the number of predictors. Report the performance of the models on testing set using proper measures (accuracy, precision, recall, F1, AUC) and plots (ROC, lift).
+
+Check the TARGET_Adjusted distribution.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+table(audit2$TARGET_Adjusted)
+```
+
+Define a function for logistic regression with 10-fold cross valiadation and evaluation.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(caret)
+library(pROC)
+crossvalid <- function(data){
+  Xdel = model.matrix(TARGET_Adjusted~.,data=audit3)[,-1] 
+  n.total = length(audit3$RISK_Adjustment)
+  n.train=floor(n.total*(0.9))
+  n.test=n.total-n.train
+  error = dim(10)
+  accuracy = dim(10)
+  precision = dim(10)
+  recall = dim(10)
+  f1_score = dim(10)
+  auc = dim(10)
+  for(k in 1:10){
+    train=sample(1:n.total,n.train) 
+    xtrain = Xdel[train,]
+    xtest = Xdel[-train,]
+    ytrain = audit3$TARGET_Adjusted[train]
+    ytest = audit3$TARGET_Adjusted[-train]
+    m1 = glm(TARGET_Adjusted~.,family=binomial,data=data.frame(TARGET_Adjusted=ytrain,xtrain))
+    
+    ptest = predict(m1,newdata=data.frame(xtest),type="response")
+    btest=floor(ptest+0.5)
+    conf.matrix = table(ytest,btest)
+    accuracy[k] = (conf.matrix[1,1]+conf.matrix[2,2])/n.test
+    error[k] = 1-accuracy[k]
+    precision[k] = conf.matrix[1,1]/(conf.matrix[1,1]+conf.matrix[1,2])
+    recall[k] = conf.matrix[1,1]/(conf.matrix[1,1]+conf.matrix[2,1])
+    f1_score[k] = (2*precision*recall)/(precision+recall)
+    auc[k] = auc(btest, ptest)
+    
+  }
+  acc_avg = mean(accuracy)
+  error_avg = mean(error)
+  prec_avg = mean(precision)
+  rec_avg = mean(recall)
+  f1_avg = mean(f1_score)
+  auc_avg = mean(auc)
+  cat("accuracy:",acc_avg,"\n")
+  cat("error: ",error_avg,"\n")
+  cat("precision: ",prec_avg,"\n")
+  cat("recall: ",rec_avg,"\n")
+  cat("F1_score: ",f1_avg,"\n")
+  cat("AUC: ",auc_avg,"\n")
+  return(conf.matrix)
+}
+
+```
+
+Define a function for generating Lift charts.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+liftcharts<-function(data){
+  Xdel = model.matrix(TARGET_Adjusted~.,data=audit3)[,-1] 
+  n.total = length(audit3$RISK_Adjustment)
+  n.train=floor(n.total*(0.9))
+  n.test=n.total-n.train
+  baserate = dim(10)
+  for(k in 1:10){
+    train=sample(1:n.total,n.train) 
+    xtrain = Xdel[train,]
+    xtest = Xdel[-train,]
+    ytrain = audit3$TARGET_Adjusted[train]
+    ytest = audit3$TARGET_Adjusted[-train]
+    m1 = glm(TARGET_Adjusted~.,family=binomial,data=data.frame(TARGET_Adjusted=ytrain,xtrain))
+    
+    ptest = predict(m1,newdata=data.frame(xtest),type="response")
+    btest=floor(ptest+0.5)
+    df=cbind(ptest,ytest)
+    rank.df=as.data.frame(df[order(ptest,decreasing=TRUE),])
+    colnames(rank.df) = c('predicted','actual')
+    baserate[k]=mean(ytest)
+  }
+  ax=dim(n.test)
+  ay.base=dim(n.test)
+  ay.pred=dim(n.test)
+  ax[1]=1
+  ay.base[1]=mean(baserate)
+  ay.pred[1]=rank.df$actual[1]
+  for (i in 2:n.test) {
+    ax[i]=i
+    ay.base[i]=(mean(baserate))*i ## uniformly increase with rate xbar
+    ay.pred[i]=ay.pred[i-1]+rank.df$actual[i]
+  }
+  df=cbind(rank.df,ay.pred,ay.base)
+  
+  plot(ax,ay.pred,xlab="number of cases",ylab="number of successes",main="Lift: Cum successes sorted by pred val/success prob")
+  points(ax,ay.base,type="l")
+  return(0)
+}
+
+```
+
+Define a function for generating ROC charts.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(ROCR)
+ROCcharts<-function(data){
+  Xdel = model.matrix(TARGET_Adjusted~.,data=audit3)[,-1] 
+  n.total = length(audit3$RISK_Adjustment)
+  n.train=floor(n.total*(0.9))
+  n.test=n.total-n.train
+  sensi = dim(10)
+  speci = dim(10)
+  for(k in 1:10){
+    train=sample(1:n.total,n.train) 
+    xtrain = Xdel[train,]
+    xtest = Xdel[-train,]
+    ytrain = audit3$TARGET_Adjusted[train]
+    ytest = audit3$TARGET_Adjusted[-train]
+    m1 = glm(TARGET_Adjusted~.,family=binomial,data=data.frame(TARGET_Adjusted=ytrain,xtrain))
+    
+    ptest = predict(m1,newdata=data.frame(xtest),type="response")
+    btest=floor(ptest+0.5)
+    cut=1/2
+    gg1=floor(ptest+(1-cut))
+    truepos =  ytest==1 & ptest>=cut 
+    trueneg = ytest==0 & ptest<cut
+    sensi[k] = sum(truepos)/sum(ytest==1) 
+    speci[k] = sum(trueneg)/sum(ytest==0) 
+    data=data.frame(predictions=ptest,labels=ytest)
+    pred <- prediction(data$predictions,data$labels)
+    perf <- performance(pred, "sens", "fpr")
+  }
+  plot(perf)
+  cat("Specificity:",mean(speci),"\n")
+  cat("Sensitivity:",mean(sensi),"\n")
+  return(0)
+}
+```
+
+Examine the performance of different models by varing the number of predictors.
+
+Using all the predictors to train the model.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+audit3 = audit2
+crossvalid(audit3)
+```
+The result of 10-fold cross valiadation is not very stable. Thus, there might be some difference between the real result and result I saw in the console. The accuracy by using all predictors is 0.962 and the precision is 0.9967.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+liftcharts(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+ROCcharts(audit3)
+```
+
+Drop Education varicable.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+audit3=audit2[c(-3)]
+crossvalid(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+liftcharts(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+ROCcharts(audit3)
+```
+
+Drop Marital variable.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+audit3=audit2[c(-4)]
+crossvalid(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+liftcharts(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+ROCcharts(audit3)
+```
+
+Drop Income Variable.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+audit3=audit2[c(-6)]
+crossvalid(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+liftcharts(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+ROCcharts(audit3)
+```
+
+Drop Marital and Income variables.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+audit3=audit2[c(-4,-6)]
+crossvalid(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+liftcharts(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+ROCcharts(audit3)
+```
+
+Drop Educarion, Marital and Income variables.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+audit3=audit2[c(-3,-4,-6)]
+crossvalid(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+liftcharts(audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+ROCcharts(audit3)
+```
+
+From the above resulet we can see, we get the best accuracy from model 5, which dropped Marital and Income variables. This is the best result we can get from logistic regression model. We can also use Naive Bayesian and Desicion Tree model to predict TARGET_Adjusted.
+
+#### Naive Bayesian Model
+Split the data into training and test dataset.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+n=length(audit2$TARGET_Adjusted)
+n1=floor(n*(0.9))
+n2=n-n1
+train=sample(1:n,n1)
+```
+
+determining marginal probabilities
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+response = audit2$TARGET_Adjusted
+tttt=cbind(audit2$Employment[train],audit2$Education[train],
+           audit2$Marital[train],audit2$Occupation[train],
+           audit2$Gender[train],response[train])
+tttrain0=tttt[tttt[,6]<0.5,]
+tttrain1=tttt[tttt[,6]>0.5,]
+```
+
+Prior probabilities
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+tdel=table(response[train])
+tdel=tdel/sum(tdel)
+tdel
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+ts0=table(tttrain0[,1])
+ts0=ts0/sum(ts0)
+ts0
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+ts1=table(tttrain1[,1])
+ts1=ts1/sum(ts1)
+ts1
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+tc0=table(tttrain0[,2])
+tc0=tc0/sum(tc0)
+tc0
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+tc1=table(tttrain1[,2])
+tc1=tc1/sum(tc1)
+tc1
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+td0=table(tttrain0[,3])
+td0=td0/sum(td0)
+td0
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+td1=table(tttrain1[,3])
+td1=td1/sum(td1)
+td1
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+to0=table(tttrain0[,4])
+to0=to0/sum(to0)
+to0
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+to1=table(tttrain1[,4])
+to1=to1/sum(to1)
+to1
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+tw0=table(tttrain0[,5])
+tw0=tw0/sum(tw0)
+tw0
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+tw1=table(tttrain1[,5])
+tw1=tw1/sum(tw1)
+tw1
+```
+
+Create test dataset and predictions.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+tt=cbind(audit2$Employment[-train],audit2$Education[-train],
+         audit2$Marital[-train],audit2$Occupation[-train],
+         audit2$Gender[-train],response[-train])
+
+p0=ts0[tt[,1]]*tc0[tt[,2]]*td0[tt[,3]]*to0[tt[,4]]*tw0[tt[,5]+1]
+p1=ts1[tt[,1]]*tc1[tt[,2]]*td1[tt[,3]]*to1[tt[,4]]*tw1[tt[,5]+1]
+gg=(p1*tdel[2])/(p1*tdel[2]+p0*tdel[1])
+hist(gg)
+```
+
+Generate the 
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+gg1=floor(gg+0.5)
+ttt=table(response[-train],gg1)
+
+confusionMatrix(response[-train],gg1)
+
+error=(ttt[1,2]+ttt[2,1])/n2
+error
+```
+    
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+precision = ttt[1,1]/(ttt[1,1]+ttt[1,2])
+precision
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+recall = ttt[1,1]/(ttt[1,1]+ttt[2,1])
+recall
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+f1_score = (2*precision*recall)/(precision+recall)
+f1_score
+```
+
+From the accuracy we can see, Naive Bayesina didn't give us a better result than logistic regression. This is because we can only use categorical variables in the model. However, some numeric variables are also important in this model. Thus, Naive Bayesian didn't show a good performance here.
+
+#### Desicion Trees
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE,,fig.height=9,fig.width=8}
+library(MASS) 
+library(tree)
+library(rpart)
+
+set.seed(1)
+train <- sample(1:nrow(audit2), 0.90 * nrow(audit2))
+
+auditTree <- rpart(TARGET_Adjusted ~ . - RISK_Adjustment+Income+Deductions+
+                     Hours+Age, data = audit2[train, ], method = 'class')
+
+plot(auditTree)
+text(auditTree, pretty = 0)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+summary(auditTree)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+auditPred <- predict(auditTree, audit2[-train, ], type = 'class')
+dtt = table(auditPred, audit2[-train, ]$TARGET_Adjusted)
+confusionMatrix(auditPred, audit2[-train, ]$TARGET_Adjusted)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+derror=(dtt[1,2]+dtt[2,1])/200
+derror
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+dprecision = dtt[1,1]/(dtt[1,1]+dtt[1,2])
+dprecision
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+drecall = dtt[1,1]/(dtt[1,1]+dtt[2,1])
+drecall
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+df1_score = (2*dprecision*drecall)/(dprecision+drecall)
+df1_score
+```
+
+Though we didn't use 10-fold cross valiadation on the Naive Bayesian and Desicion Tree model. But from the general accuracy result, we can see, the Naive Bayesian and Desicion Tree model all didn't show better predicitons than logistic regression.
+Therefore, the best model here is logistic regression by dropping Marital and Income variable. 
+
+### --b.For the best model, compute the odds ratio and interpret the effect of each predictors.
+Since result from 10-fold cross valiadation is not stable. I got the best result by dropping Marital and Income, but it may be different from the output in the PDF file.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(aod)
+library(Rcpp)
+
+audit3=audit2[c(-4,-6)]
+Xdel = model.matrix(TARGET_Adjusted~.,data=audit3)[,-1] 
+xtrain = Xdel
+ytrain = audit3$TARGET_Adjusted
+m2 = glm(TARGET_Adjusted~.,family=binomial,data=data.frame(TARGET_Adjusted=ytrain,xtrain))
+
+summary(m2)
+```
+
+We can use the confint function to obtain confidence intervals for the coefficient estimates. This is important because the wald.test function refers to the coefficients by their order in the model.
+Generate odds ratios and 95% CI
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+exp(cbind(OR = coef(m2), confint(m2)))
+```
+
+The transformation from odds to log of odds is the log transformation. Usually, the greater the odds, the greater the log of odds and vice versa. If the OR is > 1 the control is better than the intervention.If the OR is < 1 the intervention is better than the control.
+
+In this model we can see, most the predictors's OR is larger than 1, that means the control is better than the intervention.
+
+Take Age as an exmaple, the OR of Age is 9.431707e-04; 95% confidence interval [CI], 2.989624e-05 to 1.292917e-02.
+The odds of the other predictors and levels were 90.57% less than in the Age with the true population effect between 97.1% and 98.7%.  This result was statistically significant.
+
+The other predictors are the same. EmploymentPrivate is 1.032826e+00, EmploymentPSFederal is 1.053912e+00,EmploymentPSLocal is 1.286593e+00,EmploymentPSState is 1.140645e+00, EmploymentSelfEmp is 8.418425e-01, EmploymentUnemployed is 1.277387e-05,EmploymentVolunteer is 4.685239e-07. Except SelfEmp and Volunteer, they other levels in Employment all have lots of effects on TARGET_Adjustment.EducationCollege is 4.299107e-01, 
+
+EducationHSgrad is 6.001654e-01, EducationMaster is 8.138947e-01, EducationVocational is 6.220819e-01,EducationYr11 is 9.277408e-01. Most of the levels in Education have large OR, which means Education generally has little effect on model.
+
+OccupationExecutive is 7.861467e+00. OccupationHome is 5.948440e-06. OccupationMilitary is 5.497328e-06, OccupationProfessional is 5.955081e+00,
+OccupationProtective is 4.822796e+00. For most of the levels in Occupation,the odds ratio is larger than 1. We can think Occupation didn't have much effect onthe model.
+
+GenderMale is 2.490637e+00. Deductions is 1.000968e+00.Hours is         1.016324e+00. We can think all this predictors have much effects on the best model. Since these predictors have smaller odds ratio and within the appropriate confident intervevals.
+
+We can also use varImp to test the importance of variables.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+varImp(m2)
+```
+
+The list shows the importance of each predictors. The higher their overall score, the more important they are to the model. Excluding the RISK_Adjusted, the most important one is Age, then is Deductions, the third one is GernderMale. The results are consistent with the OR results. Hours, OccupationTransport, OccupationSport, OccupationProtective, OccupationProfessional,OccupationExecutive,EducationYr10, EducationProfessional, EducationCollege and EmploymentPrivate all have middle effects on the model. And the other predictors and levels, they have little effects on model and are the least important.
+
+### --c.Apply linear and non-linear regression analysis to  predict RISK_Adjustment. Evaluate the models through cross-validation and on holdout samples.
+
+#### --Use all predictors in a standard linear regression model to predict the response variable. Report the model performance using R2, adjusted R2 and RMSE. Interpret the regression result.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+audit3=audit2[c(-11)] #drop TARGET_Adju
+fit1 = lm(RISK_Adjustment ~., data = audit3)
+summary(fit1)
+model.mse = mean(residuals(fit1)^2)
+rmse = sqrt(model.mse)
+rmse
+```
+
+Multiple R-squared = 0.09416, which means the model accounts for 9.416% of the variance in RISK_Adjustment.
+
+Adjust R-squared = 0.07283, means 7.283% of variability in the response RISK_Adjustment is explained by the model with penalty for the number of estimated coefficients.
+
+Adjust R-square is more realistic because it accounts for the number of variables in the model.
+
+p-value: The coefficient is significantly different from zero at the p < 0.001 level. Therefore, the coefficients for EducationPrefessional, MaritalMarried are significant with p-values less than 0.001. Whereas, the coefficients for the rest levels of variales are not significant.
+
+Explain each predictor, for example Age, the coefficient is  3.448e+01, means an increase of 1 percent in Salary can cause  3.448e+01 increase in RISK_Adjustment.
+
+RMSE is 7937.427, used to measure differences between value predicted by a model of an estimator and value actually observed. It will be used to compare different models later.
+
+#### --Use different combination of predictors in standard linear and non-linear regression models to predict the response variable. Evaluate which model performs better using out-of-sample RMSE.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+audit3=audit2[c(-2,-5)]
+```
+
+I excluded the employment and Occupation two variables because these two factor got some problem. Some of the levels in the factor are too few observations in it. Thus, they would be taken into new levels in the factor and can't be analyzed. Therefore, I excluded these two variables so that we can do leave one out on linear and non-linear regression.
+
+Define leave-one-out function and evaluated by RMSE.
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+leave.one.out <- function(formula, data){
+  n = length(audit3$RISK_Adjustment)
+  error = dim(n)
+  for(k in 1:n){
+    id = c(1:n)
+    id.train = id[id != k]
+    fit = lm(formula, data = audit3[id.train,])
+    predicted = predict(fit, newdata = audit3[-id.train, ])
+    observation = audit3$RISK_Adjustment[-id.train]
+    error[k] = predicted - observation
+  }
+  rmse = sqrt(mean(error^2))
+  return(rmse)
+}
+```
+
+Linear Regression
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+formulaA = RISK_Adjustment ~  Age+Education+Marital+
+           Income+Gender+Hours+Deductions
+leave.one.out(formulaA, audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+formulaB = RISK_Adjustment ~ Age+Education+Marital+Hours
+leave.one.out(formulaB, audit3)
+```
+
+Non-linear Regression
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+formulaC = RISK_Adjustment ~ poly(Age, degree = 2) + 
+           poly(Hours, degree = 3) + Income +Deductions
+leave.one.out(formulaC, audit3)
+```
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+formulaD = RISK_Adjustment ~ poly(Age, degree = 2) + 
+          poly(Hours, degree = 4) + Income
+leave.one.out(formulaD, audit3)
+```
+
+The best model should have the lowest RSME. The second model in linear regression shows the lowest RMSE and therefore, that is the best model.
+
+#### --From the best model, identify the most important predictor in the model, and explain how you determine the importance of the predictors.
+
+We can find the most important predictor in the model calculating the RSME after dropping that predictorw. If the RSME gets very large, we suppose that this predictor is very important to the model.
+
+Drop Age
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+leave.one.out(RISK_Adjustment ~ Education+Marital+Hours, data = audit3) 
+```
+
+Drop Education
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+leave.one.out(RISK_Adjustment ~ Age+Marital+Hours, data = audit3) 
+```
+
+Drop Marital
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+leave.one.out(RISK_Adjustment ~ Age+Education+Hours, data = audit3) 
+```
+
+Drop Hours
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+leave.one.out(RISK_Adjustment ~ Age+Education+Marital, data = audit3) 
+```
+
+We can see that by dropping Marital, we get the largest RMSE. Thus, Marital is the most important predictor in the best model.
+
