@@ -1,0 +1,501 @@
+---
+title: "Regression Assignment--DirectMarket"
+author: "Saixiong Han (sah178)"
+date: "January 16, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Identify and report response variable and predictor
+
+According to the description on the DirectMarket data,the objective is to explain AmountSpent in terms of the provided customers characteristics.
+Therefore, Response variable is AmountSpent. Predictors are Age, Geander, Ownhome, Married, Location, Salary, Children, History, Catalogs
+
+## 2.Explore data and generate summary
+
+###-Import and Overview
+
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+DMarket<-read.csv("C:/Study/DM/week2/DirectMarketing.csv", header = TRUE, 
+                  sep = ",",stringsAsFactors = TRUE)
+head(DMarket)
+summary(DMarket)
+sum(is.na(DMarket))
+```
+From the summary we can see that, there are 303 missing values in History attributes.
+Since the total record is 1000, 303 missing value is nearly one third of the total amount.
+Therefore, I think it's better to use the mutiple imputation instead of ignore them.
+
+### a--Deal with missing data
+
+In order to know the distribution of missing data, the first thing I would like yo do is spelling the pattern of missing data.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE}
+library(VIM)
+library(mice)
+aggr(DMarket)
+```
+
+According to the graph, the missing data only appears in History variables and History is a dichotomous variables. It is impossible to use avarage or media to impute these missing value.Thus, I use mice package to impute the missing value
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE,results='hide'}
+newdata<-mice(DMarket,m = 5,method='pmm',maxit=100,seed=1)
+```
+
+```{r echo=TRUE,message=FALSE, warning=FALSE,tidy=TRUE,fig.height=3}
+DMarket1<-complete(newdata)
+anyNA(DMarket1)  #check if there is NA in the new dataset.
+
+#Make barchart of original History variables and adjusted one.
+library(ggplot2) 
+library(gridExtra)
+page1=ggplot(data = DMarket, aes(x=History)) + 
+  geom_bar(stat="count") + 
+  scale_x_discrete("Level") + scale_y_continuous("Number") + 
+  coord_flip()
+
+page2=ggplot(data = DMarket1, aes(x=History)) + 
+  geom_bar(stat="count") + 
+  scale_x_discrete("Adjust-Level") + scale_y_continuous("Number") + 
+  coord_flip()
+
+grid.arrange(page1,page2, ncol=2)
+```
+
+By using Mutiple imputation, we can not only impute the missing data, but also the two distribution of History seem alike. That's what we want.
+
+
+###b--generate the summary table
+
+For each numeric variable, list:name, mean, median, 1st quartile, 3rd quartile, standard deviation.
+
+```{r echo=TRUE,message=FALSE, warning=FALSE,tidy=TRUE, fig.height=9,fig.width=10}
+#Get the overview of each variables
+summary(DMarket1)
+
+#Get the name and standard deviation of numeric variables,
+sd1<-sd(DMarket1$Salary)
+sd2<-sd(DMarket1$Children)
+sd3<-sd(DMarket1$Catalogs)
+sd4<-sd(DMarket1$AmountSpent)
+print(paste0("Salary Standard Deviation: ", sd1))
+print(paste0("Children Standard Deviation: ", sd2))
+print(paste0("Catalogs Standard Deviation: ", sd3))
+print(paste0("AmountSpentStandard Deviation: ", sd4))
+
+```
+
+
+###c--plot density distribution for Salary and Amount Spent
+
+For numerical variables AmountSpent and Salary, plot the density distribution. Describe whether the variable has a normal distribution or certain type of skew distribution.
+
+```{r echo=TRUE,message=FALSE,warning=FALSE,tidy=TRUE,fig.height=8,fig.width=6}
+library(cowplot)
+sa_dens<-ggplot(data = DMarket1, aes(x = Salary)) +
+  geom_density()
+Amou_dens<-ggplot(data = DMarket1, aes(x = AmountSpent)) +
+  geom_density()
+
+plot_grid(sa_dens, Amou_dens, labels=c("Salary", "AmountSpent"), ncol = 1, nrow = 2)
+```
+
+From the graphs we can see, neither Salary nor AmountSpent have normal distribution. Both of them are skewed to the right which means they are more likely to see extreme values to the right of the mode.
+
+AmountSpent only have one climax and it can be seen as a gamma distribution. While Salary has two climax and it can be seen as a bimodal.
+
+
+###d--relationship between response variable and numeric predictors
+
+For each numerical predictor, describe its relationship with the response variable through correlation and scatterplot.
+
+There are only three numerical predictor in the dataset. They are Salary, Children and Catalogs.
+
+```{r echo=TRUE,warning=FALSE,tidy=TRUE,fig.height=9,fig.width=8}
+cor1<-cor(DMarket1$Salary,DMarket1$AmountSpent)
+sa_scar<-ggplot(data = DMarket1, aes(x = Salary, y = AmountSpent)) + geom_point()
+
+cor2<-cor(DMarket1$Children,DMarket1$AmountSpent)
+chil_scar<-ggplot(data = DMarket1, aes(x = Children, y = AmountSpent)) + geom_point()
+
+cor3<-cor(DMarket1$Catalogs,DMarket1$AmountSpent)
+cat_scar<-ggplot(data = DMarket1, aes(x = Catalogs, y = AmountSpent)) + geom_point()
+
+plot_grid(sa_scar, chil_scar, cat_scar, labels=c("A", "B", "C"), ncol = 1, nrow = 3)
+
+print(paste0("Correlation with Salary and AmountSpent: ", cor1))
+print(paste0("Correlation with Children and AmountSpent: ", cor2))
+print(paste0("Correlation with Catalogs and AmountSpent: ", cor3))
+
+```
+
+From the scatter plot we can see, only Salary shows some extent of positive relation. The distributions of Children and Catalogs are divided into vertical lines which means they are not strongly related with AmountSpent and their distribution can be seen as four factors.
+
+The results of correlation are consistent with the graphs. Correlation coefficient between Salary and AmountSpent is 0.6995957, which means they are strongly related. However, the correlation coefficient between Children and AmountSpent are -0.2223082, which means they are not strongly related and the correlation coefficient between Catalogs and AmountSpent is 0.4726499 which means weak relation with each other.
+
+In addition, the coefficient for Salary and AmountSpent is 0.6995957, suggesting that an increase of 1 percent in Salary is associated with a 0.6995957 percent increase in the AmountSpent. The coefficient for Children and AmountSpent is -0.2223082, suggesting that an increase of 1 percent in Children is associated with a -0.2223082 percent increase in the AmountSpent. The coefficient for Catalogs and AmountSpent is 0.4726499, suggesting that an increase of 1 percent in Catalogs is associated with a 0.4726499 percent increase in the AmountSpent.
+
+###e--Density plot for categorical predictors
+
+For each categorical predictor, generate conditional density plot of response variables
+
+```{r echo=TRUE,message=FALSE, warning=FALSE,tidy=TRUE,fig.height=18,fig.width=10}
+#Age and AmountSpent
+age_dens<-ggplot(DMarket1, aes(x = AmountSpent, fill = Age, colour = Age)) +
+  geom_density(alpha = 0.5) 
+
+#Gender and AmountSpent
+gender_dens<-ggplot(DMarket1, aes(x = AmountSpent, fill = Gender, colour = Gender)) +
+  geom_density(alpha = 0.5)
+
+#OwnHome and AmountSpent
+oh_dens<-ggplot(DMarket1, aes(x = AmountSpent, fill = OwnHome, colour = OwnHome)) +
+  geom_density(alpha = 0.5)
+
+#Married and AmountSpent
+marr_dens<-ggplot(DMarket1, aes(x = AmountSpent, fill = Married, colour = Married)) +
+  geom_density(alpha = 0.5)
+
+#Location and AmountSpent
+loca_dens<-ggplot(DMarket1, aes(x = AmountSpent, fill = Location, colour = Location)) +
+  geom_density(alpha = 0.5)
+
+#History and AmountSpent
+histo_dens<-ggplot(DMarket1, aes(x = AmountSpent, fill = History, colour = History)) +
+  geom_density(alpha = 0.5)
+
+plot_grid(age_dens, gender_dens, oh_dens, marr_dens, loca_dens, histo_dens,
+          labels=c("Age", "Gender", "OwnHome", "Married", "Location", "History"), ncol = 2, nrow = 3)
+```
+
+By using different color and line shapes to differentiate categories in each variables, we can see the density plots of six categorical variables as above.
+
+####f--Compare and describe the significance of categories.
+For each categorical predictor, compare and describe whether the categories have significantly different means
+
+From the six graphs we can see, History has the most significantly different means since the density plot shows very different distributions in three categories. And Gender and Location have someway important different means, because their densiy plots show different lines with different categories. But they have some parts that are overlap together. In addtion, Age, OwnHome and Married show very low difference in their categories, since the different parts of categories are overlapped.
+
+##3--Apply regression analysis
+
+####a--use all predictors in standard linear regression
+
+Use all predictors in a standard linear regression model to predictthe response variable. Report the model performance using R2, adjusted R2 and RMSE. Interpret the regression result.
+
+```{r echo=TRUE,message=FALSE, warning=FALSE,tidy=TRUE,fig.height=6,fig.width=10}
+Market = as.data.frame(DMarket1)
+head(Market)
+
+library(car)
+fit = lm(AmountSpent ~ Age+Gender+OwnHome+Married+Location+Salary+Children+History+Catalogs, 
+         data=Market)
+summary(fit)
+
+mean.mse = mean((rep(mean(Market$AmountSpent),length(Market$AmountSpent)) - Market$AmountSpent)^2)
+model.mse = mean(residuals(fit)^2)
+rmse = sqrt(model.mse)
+rmse 
+
+```
+
+###Interprete the regression result
+The coefficient in in multiple regression shows increase in the dependent variable for a unit change in a predictor varianble. 
+The regression coefficient for Salary is 1.613, suggesting that an increase of 1 percent in Salary is associated with a 1.613 percent increase in the AmountSpent, controlling for the other predictors. The regression coefficient for Children is -1.389, suggesting that an increase of 1 percent in Children is associated with a -1.389 percent increase in the AmountSpent, controlling for the other predictors.This is for numerical variables.
+For categorical variables, linear regression calculate the coeffiecient by counting the number of different levels in categorical variables. For example, the regression coefficient for Age2 is 2.180, suggesting that an increase of 1 percent in Age of level 2 is associated with a 2.180 percent increase in the AmountSpent, controlling for the other predictors. While the regression coefficient for Age3 is 1.227, suggesting that an increase of 1 percent in Age of level 3 is associated with a 1.227 percent increase in the AmountSpent, controlling for the other predictors.
+
+The coefficient is significantly different from zero at the p < .0001 level. The coefficients for most of predictors here are significantly different from zero (p < 0.648) suggesting that most predictors and AmountSpent are linearly related when controlling for the other predictor variables.
+
+Taken together, the predictor variables account for 75 percent of the variance in AmountSpent.
+
+####b--different combinations
+use diffenrent combinations in standard linear and non-linear regression
+
+Simple Regression by deleting single variables.
+
+```{r Simple Regression, warning=FALSE, echo=TRUE}
+#standard linear regression
+fit1 = lm(AmountSpent ~ Gender+OwnHome+Married+Location+Salary+Children+History+Catalogs, 
+         data=Market)
+summary(fit1)
+## examining bivariate relationships using 'scatterplotMatrix' in the 'car' package
+suppressWarnings( 
+  scatterplotMatrix(Market, spread=FALSE, lty.smooth=2,
+                    main="Scatter Plot Matrix")
+)
+
+```
+
+```{r Simple Regression1, warning=FALSE,echo=TRUE}
+#standard linear regression
+fit2 = lm(AmountSpent ~ Age+OwnHome+Married+Location+Salary+Children+History+Catalogs, 
+          data=Market)
+summary(fit2)
+
+```
+
+
+```{r Simple Regression2, warning=FALSE,echo=TRUE}
+#standard linear regression
+fit3 = lm(AmountSpent ~ Age+Gender+Married+Location+Salary+Children+History+Catalogs, 
+          data=Market)
+summary(fit3)
+
+```
+
+I tried to drop single variables each time, but it turns out, using all the variables shows highest r square value in standard linear regression. I think for standard linear regression, using all variables can give us the best r-square.
+
+###Pplynomial Regression
+
+```{r Polynomial Regression1, warning=FALSE,echo=TRUE}
+fit4 = lm(AmountSpent ~ Age+Gender+OwnHome+Married+Location
+          +Salary+Children+History+Catalogs
+          + I(Salary^2), data=Market)
+summary(fit4)
+plot(Market$Salary,Market$AmountSpent,
+     xlab="Salary",
+     ylab="AmountSpent")
+lines(Market$Salary,fitted(fit4))
+
+```
+
+The r square turned to 0.7472, which is higher than standard linear regression.
+
+```{r Polynomial Regression2, warning=FALSE,echo=TRUE}
+fit5 = lm(AmountSpent ~ Age+Gender+OwnHome+Married+Location+Salary
+          +Children+History+Catalogs+ I(Salary^2)
+          + I(Children^2) +I(Catalogs^2), data=Market)
+summary(fit5)
+
+```
+
+The r square turned to 0.7477, which is higher than former one and this is best r square I get till now.
+
+###Local Polynomial Regression
+```{r Local Polynomial Regression, warning=FALSE,echo=TRUE}
+library(locfit)
+#fit with a 50% nearest neighbor bandwidth.
+fitreg=lm(AmountSpent~Salary+Children+Catalogs,data=Market)
+plot(AmountSpent~Salary,data=Market)
+abline(fitreg)
+#The linear regression model didn't fit in the plot.
+
+fit7 <- locfit(AmountSpent~lp(Salary+Children,nn=0.5),data=Market)
+fit7
+summary(fit7)
+plot(fit7)
+
+```
+
+The local polynomial didn't show a good r square. This is because in local polynomial model, we can only use numeric variables, that means we ignore all the categorical variables. However, some categorical variables are important to the response variables and in this dataset, most variables are categorical. Therefore, this model shows a bad performance.
+
+
+###Lasso
+
+I only use lasso to test the r square. Since Lasso's predition is matrix, it's hard to use leave one out for it. Thus, I can only explain the result by r square and graphs.
+
+```{r Lasso,warning=FALSE, warning=FALSE,echo=TRUE}
+x <- model.matrix(AmountSpent~ Age+Gender+OwnHome+Married+Location+Salary+
+                  Children+History+Catalogs,data=Market)
+x=x[,-1] 
+library(lars)
+## lasso on all data
+lasso <- lars(x=x,y=Market$AmountSpent ,trace=TRUE)
+## trace of lasso (standardized) coefficients for varying penalty
+plot(lasso)
+lasso
+
+```
+
+The r-square for Lasso is 0.748 which is the highest score in all models.
+
+###Evaluate model performs using out-of-sample RMSE.
+
+I use leave-one-out cross valiadation to check the out-of-sample RMSE for each combination and different model. In the last, I use a line plot to show the result of all the model.
+
+First one is Standard linear regression model with all response variables.
+
+```{r Linear evaluation1, warning=FALSE, echo=TRUE}
+n = length(Market$AmountSpent)
+error = dim(n)
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k]
+  m1 = lm(AmountSpent ~ Age+Gender+OwnHome+Married+Location
+          +Salary+Children+History+Catalogs, data=Market[train ,])
+  pred = predict(m1, newdat=Market[-train ,])
+  obs = Market$AmountSpent[-train]
+  error[k] = obs-pred
+}
+rmse=sqrt(mean(error^2))
+rmse 
+
+```
+
+First model is the most basic model. I use all the predictors in standard linear regression model and it shows the RMSE as 490.5039 which is a little bit higher. I tried to improve model by droping one variable at each time and check if RMSE get higher. It turns out that when dropping Age, Gender, OwnHome and Married, I got the best result in the standard linear model.The process is as following.
+
+Drop Age in response variables.
+
+```{r Linear evaluation2, warning=FALSE, echo=TRUE}
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k] 
+  m2 = lm(AmountSpent ~ Gender+OwnHome+Married+Location
+          +Salary+Children+History+Catalogs, data=Market[train ,])
+  pred = predict(m2, newdat=Market[-train ,])
+  obs = Market$AmountSpent[-train]
+  error[k] = obs-pred
+}
+rmse=sqrt(mean(error^2))
+rmse 
+
+```
+
+Drop Age and OwnHome in response variables.
+
+```{r Linear evaluation3, warning=FALSE, echo=TRUE}
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k] 
+  m2 = lm(AmountSpent ~ Gender+Married+Location
+          +Salary+Children+History+Catalogs, data=Market[train ,])
+  pred = predict(m2, newdat=Market[-train ,])
+  obs = Market$AmountSpent[-train]
+  error[k] = obs-pred
+}
+rmse=sqrt(mean(error^2))
+rmse
+
+```
+
+Drop Age, OwnHomem, Married and Gender in response variables.
+
+```{r Linear evaluation4, warning=FALSE, echo=TRUE}
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k] 
+  m2 = lm(AmountSpent ~ Location+Salary+Children
+          +History+Catalogs, data=Market[train ,])
+  pred = predict(m2, newdat=Market[-train ,])
+  obs = Market$AmountSpent[-train]
+  error[k] = obs-pred
+}
+rmse=sqrt(mean(error^2))
+rmse 
+
+```
+
+This is the smallest RMSE I can get from standard linear regression after trying many combinations. Next I tried some of polynomial models with different combinations.
+First model is polynomial regression with all response variables and square of salary. This is very basic one, since the scatter plot shows Salary and AmountSpent are strongly related. I tried the square of Salary first.
+
+```{r polynomial evaluation1, warning=FALSE, echo=TRUE}
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k] 
+  m2 = lm(AmountSpent ~ Age+Gender+OwnHome+Married
+          +Location+Salary+Children+History+Catalogs
+          + I(Salary^2), data=Market[train ,])
+  pred = predict(m2, newdat=Market[-train ,])
+  obs = Market$AmountSpent[-train]
+  error[k] = obs-pred
+}
+rmse=sqrt(mean(error^2))
+rmse
+
+```
+
+The final RMSE is 490.9165 which is higher than using standard linear regression model with all response variable. Therefore, using all response variables may not be a good idea. I tried to use drop the Age, OwnHome and Married in the variables and it gets a better result.
+
+```{r polynomial evaluation2, warning=FALSE, echo=TRUE}
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k] 
+  m2 = lm(AmountSpent ~ Gender+Location+Salary
+          +Children+History+Catalogs
+          + I(Salary^2), data=Market[train ,])
+  pred = predict(m2, newdat=Market[-train ,])
+  obs = Market$AmountSpent[-train]
+  error[k] = obs-pred
+}
+rmse=sqrt(mean(error^2))
+rmse 
+
+```
+
+After trying the sqaure of Salary, I tried to add square of Children and square of Catalogs. but adding them didn't improve the RSME. Instead, they increased the RMSE in some way. Thus, I tried to use Salary^3 but the RMSE is still higher than former model.
+
+```{r polynomial evaluation3, warning=FALSE, echo=TRUE}
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k] 
+  m2 = lm(AmountSpent ~ Gender+Location+Salary
+          +Children+History+Catalogs
+          + I(Salary^2)+I(Catalogs^2), data=Market[train ,])
+  pred = predict(m2, newdat=Market[-train ,])
+  obs = Market$AmountSpent[-train]
+  error[k] = obs-pred
+}
+rmse=sqrt(mean(error^2))
+rmse 
+
+```
+
+All in all, the best result for polynomial regression is 489.755 by dropping three variables and use the square of Salary.
+
+The last model is local polynomial regression. Though local polynomial regression model didn't show good performance in the r-square test, cosidering there are some difference betweent r-square and RSME, I tried the local polynomial in leave-one-out evaluation.
+
+```{r local polynomial evaluation1, warning=FALSE, echo=TRUE}
+for (k in 1:n) {
+  train1 = c(1:n)
+  train = train1[train1!=k] 
+  m2 = locfit(AmountSpent ~ lp(Salary+Children+Catalogs,nn=0.5),
+              data=Market[train ,])
+  pred = predict(m2, newdat=Market[-train ,])
+  obs = Market$AmountSpent[-train]
+  error[k] = obs-pred
+}
+rmse=sqrt(mean(error^2))
+rmse 
+
+```
+
+The RMSE is 695.5365 which is highest in the all models. This means local polynomial model is really not suitable for this model.
+
+The comparison of these models are shown in line graphs. Since RMSE in local polynomial are too large, I didn't add it into the line graph. From the graph we can see, most models give the RSME between 491 and 489. The fourth model in linear regression gives the lowest RMSE while the first model in polynomial regression gives the highest RMSE.
+
+```{r line-plot, warning=FALSE, echo=TRUE}
+df <- data.frame(model_name=c("lm1", "lm2", "lm3",
+                              "lm4","plm1","plm2","plm3"),
+                 RSME=c(490.5036, 489.3994, 
+                        489.0839,489.0741,
+                        490.9165,489.755,489.9285))
+ggplot(data=df, aes(x=model_name, y=RSME, group=1)) +
+  geom_line(color="black")+
+  geom_point()
+
+```
+
+###c--Identify the most important predictor
+Task:From the best model, identify the most important predictor.
+How to determine the importance of predictor.
+Consider variable selection in out-of-one sample evaluation setting.
+
+The best model I got is from standard linear regression with Gender, Location, Salary, Children, History and Catalogs variables. I used backward stepwise selection to identify the importance of these variables.
+
+```{r lAIC, warning=FALSE, echo=FALSE}
+library(MASS)
+fit1 = lm(AmountSpent ~ Gender+Location+Salary
+          +Children+History+Catalogs,
+          data=Market)
+stepAIC(fit1, direction="backward")
+
+```
+
+The importance of these variables can be seen from AIC values. Since this is the best combinations for linear regression model. There is only one step for AIC. The response variables are listed in the ascending order of AIC and it shows the importance of each variables also. The variables with higher AIC is more important to the response variables since the the less AIC is, the better model performance will show. 
+In conclusion, the most imporatant predictor is Salary, and following are Catalogs, History, Location, Children and Gender is the least important presictor.
+
+##Things to consider
+This dataset maily consists of the caterorical variables while our predictor is numeric. It is hard to use either logistic regression or simple linear regression, since both of these two regression model are not perfectly fit the distribution of the predictors.
+I am considering whether we use different models for different variables will give us a better prediction. For example, we can use logistic regression model for categorical variables and linear regression model for numerical variables and we take the prediction from the average of these two predictions.
+I also noticed that if I take NA value in as a new level in History variables. The RMSE will be higher than imputation the missing value. If I exclude all the missing data, the RMSE will become higher too. But I m not sure if it is appropriate to just delete the missing data.
+
