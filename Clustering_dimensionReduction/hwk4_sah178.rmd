@@ -1,0 +1,626 @@
+---
+title: "Cluster and Dimension Reduction"
+author: "Saixiong Han (sah178)"
+date: "March 6th, 2017"
+output: pdf_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Task 1: analyze the data unempstates.csv. The objective of the analysis is to group states together if they have similar trends in unemployment rate.
+
+##1.Use PCA to reduce the dimension of unemployment-rate information. 
+Requirement: Generate a screeplot and determine the number of principle components based on this plot. Plot the loadings for first principal component.
+
+Load the data and get the summary.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+unemp <- read.csv("C:/Users/daisy/OneDrive/Study/DM/week7/unempstates.csv", header = FALSE, sep = ',')
+unemp[1:3,]
+dim(unemp)
+```
+There are 416 observations in the data set and 50 variables. 50 variables represent 50 states in Unites State and each state is characterized by a feature vector of very large dimension(416),with its components representing the 416 monthly observation.
+
+Get the state names and convert them into column.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+unemplab<-unemp[1,]
+unemplab<-as.data.frame(t(unemplab))
+```
+
+Import the data and set the header as True so we can import the data as numeric.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE,message=FALSE}
+library(matrixStats)
+unemp1 <- read.csv("C:/Users/daisy/OneDrive/Study/DM/week7/unempstates.csv", header = TRUE, sep = ',')
+#Transform the row and column in the original dataset, so that we can get the pca for 50 #states
+unemp5<-as.data.frame(t(unemp1))
+unemp5<-cbind(unemplab,unemp5)
+names(unemp5)[names(unemp5)=="1"] <- "StateName"
+#Get the correlation matrix from all variants
+#cor(unemp5[,-1])
+#Get the pca for the unemployment of 50 states.
+pcaunemp5 = prcomp(unemp5[,-1], scale=TRUE) 
+#pcaunemp5
+## Get the loadings of PCA
+#pcaunemp5$rotation
+
+## use 'predict' to project data onto the loadings
+unemp5pc = predict(pcaunemp5)
+#unemp5pc
+```
+
+### 1) Generate a screeplot and determine the number of principle components based on this plot.
+
+Plot the variances against the number of the principal component; retain only factors with eigenvalues greater than 1.
+
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+plot(pcaunemp5, main="") ## same as screeplot(pcafood)
+mtext(side=1, "Unemployment Principal Components",  line=1, font=2)
+```
+
+The first rectangle's height is almost 225, that means we can choose 225 variables for principle components.
+
+### 2) Plot the loadings for first principal component.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+plot(pcaunemp5$rotation[,1],type='l')
+```
+
+## 2. Generate a scatterplot to project states on the first two principal components.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+#Get the mean value of each state and save them into columns
+emean<-colMeans(unemp1)
+#Convert the dataframe into matrix and get the standard deviation for each column
+unemp_matrix<-as.matrix(unemp1)
+esd<-colSds(unemp_matrix)
+unemp2<-cbind(unemplab,emean,esd)
+unemp2[1:3,]
+
+states = unemp2[,1]
+n = length(states)
+data = (as.matrix(unemp2[,-1]))
+```
+
+Center the data according to the mean and get the scatterplot of the original data.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+my.scaled.data = apply(data,2,function(x) (x-mean(x)))
+plot(my.scaled.data,cex=0.9,col="blue",main="Plot of Scaled Data")
+```
+
+Calculate the covariance matrix.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+my.cov = cov(my.scaled.data)
+my.cov
+```
+
+Calculate the eigenvectors and eigenvalues of the covariance matrix
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+my.eigen = eigen(my.cov)
+my.eigen
+```
+
+### 1) Plot the Eigenvectors over the scaled data and load the first and second principle on it.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+plot(my.scaled.data,cex=0.9,col="blue",main="Plot of Scaled Data")
+#Plot the loadings for the first principal components
+pc1.slope = my.eigen$vectors[2,1] /my.eigen$vectors[1,1]
+abline(0,pc1.slope,col="red")
+#Plot the loadings for the second pricipal components
+pc2.slope = my.eigen$vectors[2,2] /my.eigen$vectors[1,2]
+abline(0,pc2.slope,col="green")
+```
+
+### 2) Generate a scatterplot to project states on the first two principal components.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+## get the P matrix 
+loadings = my.eigen$vectors 
+## project data onto the loadings
+scores = my.scaled.data %*% loadings 
+## plot the projected data on the first two PCs
+plot(scores,ylim=c(-3,3),main='Data in terms of EigenVectors / PCs',xlab='PC1',ylab='PC2')
+abline(0,0,col="red")
+abline(0,90,col="green")
+```
+
+## 3. Generate an MDS map to plot states on a two-dimensional space.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+#Define a function to make the MDS graph for dataset
+MDS<-function(dataset){
+## calculate distance matrix
+unemp_dist = dist(dataset[,-1])
+unemp_dist
+
+## visualize clusters
+unemp_mds <- cmdscale(unemp_dist)
+unemp_mds 
+
+plot(unemp_mds, type = 'n')
+text(unemp_mds, labels=dataset[,1])
+return(unemp_mds)
+}
+
+#Convert the row and column in the dataset so that we can make MDS using State label.
+unemp3<-as.data.frame(t(unemp))
+MDS(unemp3)
+```
+
+## 4.Use k-means and hierarchical clustering to group states.
+Requirement: Specifically, you will generate 8 MDS maps for the states and color the states based on different clustering methods (k-means, h-clustering with single-link, h-clustering with complete-link, h-clustering with average-link) and different number of clusters (k = 4, k = 8). For each hierarchical clustering method, generate a dendrogram.
+
+### 1)Clustering preparetion--Standardzation
+According to the oringal MSD map we can know, there are some outliers in the dataset and therefore, we need to standardize the dataset first to make all the points much tighter clustered.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE, message=FALSE}
+library(robustHD)
+unemp4<-as.data.frame(t(unemp1))
+unemp4<-standardize(unemp4) 
+unemp4<-cbind(unemplab, unemp4)
+names(unemp4)[names(unemp4)=="1"] <- "StateName"
+MDS(unemp4)
+```
+
+As we can see from the MDS map, there are still some points that are far from the central but most of the points are distributed evenly in the MDS map after standardzation.
+
+### 2) K-Means Clustering
+k=4
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+set.seed(1)  
+grpUnemp1 = kmeans(unemp4[,-1], centers=4, nstart=10)
+#grpUnemp1
+
+## list the cluster assignments
+o=order(grpUnemp1$cluster)
+data.frame(unemp4$StateName[o],grpUnemp1$cluster[o])
+```
+
+Adjust the MDS function to make MDS map after clustering
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+adMDS<-function(dataset,grpName){
+  ## calculate distance matrix
+  unemp_dist = dist(dataset[,-1])
+  unemp_dist
+  
+  ## visualize clusters
+  unemp_mds <- cmdscale(unemp_dist)
+  unemp_mds 
+  
+  plot(unemp_mds, type = 'n')
+  text(unemp_mds, labels=dataset[,1],col=grpName$cluster+1)
+  return(unemp_mds)
+}
+#MDS map for k-means with 4 cluster
+adMDS(unemp4, grpUnemp1)
+```
+
+k=8
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+set.seed(1)  
+grpUnemp2 = kmeans(unemp4[,-1], centers=8, nstart=10)
+#grpUnemp2
+
+## list the cluster assignments
+o=order(grpUnemp2$cluster)
+data.frame(unemp4$StateName[o],grpUnemp2$cluster[o])
+
+#MDS map for k-means with 8 clusters
+adMDS(unemp4, grpUnemp2)
+```
+
+### 3) Hierarchical clustering with single link.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE, message=FALSE}
+library(cluster)
+
+## use hclust,cutree for hierarchical clustering
+data.dist = dist(unemp4[,-1]) ## use dist to obtain distance matrix
+
+#hc_plot function is used for generate MDS map and save the cluster result.
+hc_plot<-function(hc_agg,n){
+  hc1 = cutree(hc_agg,k=n)
+  hc1<-as.data.frame(hc1)
+  names(hc1)[names(hc1)=="hc1"] <- "cluster"
+  adMDS(unemp4, hc1)
+  return(hc1)
+}
+
+```
+
+Dendrogram for single method.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+hc_s = hclust(data.dist,method='single')
+plot(hc_s)
+```
+
+k=4
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+grpUnemp3<-hc_plot(hc_s,4)
+#grpUnemp3
+```
+
+k=8
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+grpUnemp4<-hc_plot(hc_s,8)
+#grpUnemp4
+```
+
+### 4) Hierarchical clustering with complete link.
+Dendrogram for complete method.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+hc_c = hclust(data.dist,method='complete')
+plot(hc_c)
+```
+
+k=4
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+grpUnemp5<-hc_plot(hc_c,4)
+#grpUnemp5
+```
+
+k=8
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+grpUnemp6<-hc_plot(hc_c,8)
+#grpUnemp6
+```
+
+### 5) Hierarchical clustering with average link.
+Dendrogram for avarage method.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+hc_a = hclust(data.dist,method='average')
+plot(hc_a)
+```
+
+k=4
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+grpUnemp7<-hc_plot(hc_a,4)
+#grpUnemp7
+```
+
+k=8
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+grpUnemp8<-hc_plot(hc_a,8)
+#grpUnemp8
+```
+
+## 5. Based on your observation, choose two clustering results (from the 8 solutions) that are most meaningful and explain why.
+
+I would like tp choose h-clustering with complete-link with 4 cluster and k-means with 4 cluster to be the most meaningful method. According to the MDS map we can see, in this two methods, all similar objects are clustered together and objects which far away from each other are divided into the different clustered. That means the similarity in each cluster is high and differences between the clusters are large. This indicates a good clustering results. While if we divided the objects into 8 clusters, some of objects are clustered into wrong groups.
+
+# Task 2: analyze US Senator Roll Call Data. The objective is to identify and visualize the clustering patterns of senators' voting activities.
+
+## 1.Create a senator-by-senator distance matrix for the 113th Congress.
+Load the packages and data into R
+```{r echo=TRUE,warning=FALSE,tidy=TRUE, message=FALSE}
+library(foreign)
+library(ggplot2)
+
+data.url = 'http://www.yurulin.com/class/spring2017_datamining/data/roll_call'
+#data.dir = file.path("data", "roll_call")
+#data.files = list.files(data.dir)
+data.files = c("sen101kh.dta", "sen102kh.dta",
+               "sen103kh.dta", "sen104kh.dta",
+               "sen105kh.dta", "sen106kh.dta",
+               "sen107kh.dta", "sen108kh_7.dta",
+               "sen109kh.dta", "sen110kh_2008.dta",
+               "sen111kh.dta", "sen112kh.dta",
+               "sen113kh.dta")
+sen113<-read.dta("C:/Users/daisy/OneDrive/Study/DM/week7/sen113kh.dta")
+
+sen113<-as.data.frame(sen113)
+```
+
+Add all roll call vote data frames to a single list.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+rollcall.data = lapply(data.files,
+                       function(f) {
+                         read.dta(file.path(data.url, f), convert.factors = FALSE)
+                       })
+
+dim(rollcall.data[[1]])
+
+head(rollcall.data[[1]][,1:12])
+```
+
+Remove the president data in Sen113kh
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+sen113kh <- na.omit(sen113)
+#grpUnemp8
+```
+
+The function takes a single data frame of roll call votes and returns a Senator-by-vote matrix.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+rollcall.simplified <- function(df) {
+  no.pres <- subset(df, state < 99)
+  ## to group all Yea and Nay types together
+  for(i in 10:ncol(no.pres)) {
+    no.pres[,i] = ifelse(no.pres[,i] > 6, 0, no.pres[,i])
+    no.pres[,i] = ifelse(no.pres[,i] > 0 & no.pres[,i] < 4, 1, no.pres[,i])
+    no.pres[,i] = ifelse(no.pres[,i] > 1, -1, no.pres[,i])
+  }
+  
+  return(as.matrix(no.pres[,10:ncol(no.pres)]))
+}
+
+rollcall.simple = lapply(rollcall.data, rollcall.simplified)
+
+sen113_simple = rollcall.simplified(sen113kh)
+```
+
+### 1) Senator-by-senator distance matrix for the 113th Congress.
+Multiply the matrix by its transpose to get Senator-to-Senator tranformation and calculate the Euclidan distance between each Senator.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+rollcall.dist = lapply(rollcall.simple, function(m) dist(m %*% t(m)))
+
+sen113_dist = dist(sen113_simple %*% t(sen113_simple))
+
+sen113_dist
+```
+
+Do the MDS
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+rollcall.mds = lapply(rollcall.dist,
+                      function(d) as.data.frame((cmdscale(d, k = 2)) * -1))
+
+## Add identification information about Senators back into MDS data frames
+congresses = 101:113
+
+for(i in 1:length(rollcall.mds)) {
+  names(rollcall.mds[[i]]) = c("x", "y")
+  
+  congress = subset(rollcall.data[[i]], state < 99)
+  
+  congress.names = sapply(as.character(congress$name),
+                          function(n) strsplit(n, "[, ]")[[1]][1])
+  
+  rollcall.mds[[i]] = transform(rollcall.mds[[i]],
+                                name = congress.names,
+                                party = as.factor(congress$party),
+                                congress = congresses[i])
+}
+
+head(rollcall.mds[[1]])
+
+```
+
+### 2) Generate an MDS plot to project the senators on the two dimensional space. 
+Use shapes or colors to differentiate the senators' party affliation
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+cong.113 <- rollcall.mds[[13]]
+
+base.113 <- ggplot(cong.113, aes(x = x, y = y)) +
+  scale_alpha(guide="none") + theme_bw() +
+  theme(axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab("") +
+  ylab("") +
+  scale_shape(name = "Party", breaks = c("100", "200", "328"),
+              labels = c("Dem.", "Rep.", "Ind."), solid = FALSE) +
+  scale_color_manual(name = "Party", values = c("100" = "blue",
+                                                "200" = "red",
+                                                "328"="grey"),
+                     breaks = c("100", "200", "328"),
+                     labels = c("Dem.", "Rep.", "Ind."))
+
+print(base.113 + geom_point(aes(color = party,
+                                alpha = 0.75),size=4))
+```
+
+Create a single visualization of MDS for all Congresses on a grid.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+all.mds <- do.call(rbind, rollcall.mds)
+all.plot <- ggplot(all.mds, aes(x = x, y = y)) +
+  geom_point(aes(color = party, alpha = 0.75), size = 2) +
+  scale_alpha(guide="none") +
+  theme_bw() +
+  theme(axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank()) +
+  xlab("") +
+  ylab("") +
+  scale_shape(name = "Party",
+              breaks = c("100", "200", "328"),
+              labels = c("Dem.", "Rep.", "Ind."),
+              solid = FALSE) +
+  scale_color_manual(name = "Party", values = c("100" = "blue",
+                                                "200" = "red",
+                                                "328"="grey"),
+                     breaks = c("100", "200", "328"),
+                     labels = c("Dem.", "Rep.", "Ind."))+
+  facet_wrap(~ congress)
+
+print(all.plot)
+```
+
+## 2. Use k-means and hierarchical clustering to group the senators, and color the senators on the MDS plots based on the clustering results.
+(you will use k-means, h-clustering with single-link, h-clustering with complete-link, h-clustering with average-link and k=2).
+
+### 1) K-means
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+set.seed(1) ## fix the random seed to produce the same results 
+grpSen113_k = kmeans(sen113kh[,c(10:666)], centers=2, nstart=10)
+#grpSen113_k
+```
+
+Create a function for generating MDS plots for all clustering.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE, message=FALSE}
+library(plyr)
+clusterMDS<-function(grpName){
+  lbls = sen113kh$name
+  party = mapvalues(sen113kh$party,from=c(100, 200, 328),to=c("Dem", "Rep", "Ind") )
+  data.mds = cmdscale(sen113_dist)
+  
+  data2 = data.frame(x=data.mds[,1],y=data.mds[,2],name=lbls,party=party,
+                     clu=factor(grpName$cluster))
+  
+  p = ggplot(aes(x=x,y=y,shape=party,color=clu), data=data2) +
+    geom_point(size=6,alpha=0.5) +
+    geom_text(aes(x=x,y=y,shape=party,color=clu,label=name), size=4)
+  print(p)
+  return(data2)
+}
+
+```
+
+MDS plots for k-means clustering.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+kmeans_MDS = clusterMDS(grpSen113_k)
+```
+
+### 2)h-clustering with single-link
+Create a function for generating MDS plot for all hclust.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE, message=FALSE}
+library(cluster)
+hclusterMDS<-function(hc_agg){
+  hc1 = cutree(hc_agg,k=2)
+  hc1<-as.data.frame(hc1)
+  names(hc1)[names(hc1)=="hc1"] <- "cluster"
+  data3 = clusterMDS(hc1)
+  return(data3)
+}
+```
+
+Dendrogram and MDS plot for single method
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+hc_s = hclust(sen113_dist,method='single')
+plot(hc_s)
+grpSen2<-hclusterMDS(hc_s)
+```
+
+### 3) h-clustering with complete-link
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+hc_c = hclust(sen113_dist,method='complete')
+plot(hc_c)
+grpSen3<-hclusterMDS(hc_c)
+```
+
+### 4) h-clustering with average-link
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+hc_a = hclust(sen113_dist,method='average')
+plot(hc_a)
+grpSen4<-hclusterMDS(hc_a)
+#grpUnemp8
+```
+
+## 3. Compare the clustering results with the party labels and identify the party members who are assigned to a seemly wrong cluster.
+Requirements:Specifically, based on the k-means results, which Republicans are clustered together with Democrats, and vice versa? And based on the three variants (single-link, complete-link and average-link), which Republicans are clustered together with Democrats, and vice versa?
+
+### 1) K-means result
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+kmeans_MDS = clusterMDS(grpSen113_k)
+```
+Based on the k-means MDS map we can see, cluster 1 should belong to Democrats while cluster 2 should belong to Republican. That means, if the point is red, then its shape should be a circle. If the point is blue, then its shape should be square. However, in this graph, Collins and Chiesa are red square, that means they should be republicans but we clustered them together with Democrats. This graph doesn't have any blue circle, that means all Democrats are clustered correctly
+
+### 2) h-clustering with single link
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+grpSen2<-hclusterMDS(hc_s)
+```
+Based on the h-clustering with single link MDS map we can see, cluster 1 should belong to Republican while cluster 2 should belong to Dempcrats. That means, if the point is red, then its shape should be square. If the point is blue, then its shape should be a circle. However, in this graph, Murkowski, Collins and Chiesa are all blue square, that means they should be republicans but we clustered them together with Democrats. This graph doesn't have any red circle, that means all Democrats are clustered correctly.
+
+### 3) h-clustering with complete link
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+grpSen3<-hclusterMDS(hc_c)
+```
+Based on the h-clustering with complete link MDS map we can see, cluster 1 should belong to Republican while cluster 2 should belong to Dempcrats. That means, if the point is red, then its shape should be square. If the point is blue, then its shape should be a circle. However, in this graph, Murkowski, Collins and Chiesa are all blue square, that means they should be republicans but we clustered them together with Democrats. This graph doesn't have any red circle, that means all Democrats are clustered correctly. The MDS cluster result is very similar to hclustering with single link.
+
+### 4) h-clustering with average link
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+grpSen4<-hclusterMDS(hc_a)
+```
+Based on the h-clustering with complete link MDS map we can see, cluster 1 should belong to Republican while cluster 2 should belong to Dempcrats. That means, if the point is red, then its shape should be square. If the point is blue, then its shape should be a circle. However, in this graph, Murkowski, Collins and Chiesa are all blue square, that means they should be republicans but we clustered them together with Democrats. This graph doesn't have any red circle, that means all Democrats are clustered correctly. The three variants of h-clustering show the same result, no Democrats are clusterd wrongly, Murkowski, Collins and Chiesa, this three republican are clustered together with Democrats
+
+## 4. Compute the purity and entropy for these clustering results with respect to the senators' party labels.
+
+Create two function to calculate the purity and entropy of the cluster results.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+cluster.purity <- function(clusters, classes) {
+  sum(apply(table(classes, clusters), 2, max)) / length(clusters)
+}
+
+cluster.entropy <- function(clusters,classes) {
+  en <- function(x) {
+    s = sum(x)
+    sum(sapply(x/s, function(p) {if (p) -p*log2(p) else 0} ) )
+  }
+  M = table(classes, clusters)
+  m = apply(M, 2, en)
+  c = colSums(M) / sum(M)
+  sum(m*c)
+}
+```
+
+Get the purity of four methods.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+p1<-cluster.purity(kmeans_MDS$clu,kmeans_MDS$party)
+p2<-cluster.purity(grpSen2$clu,grpSen2$party)
+p3<-cluster.purity(grpSen3$clu,grpSen3$party)
+p4<-cluster.purity(grpSen4$clu,grpSen4$party)
+
+purity<-c(p1,p2,p3,p4)
+```
+
+Get the entropy of four method.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+e1<-cluster.entropy(kmeans_MDS$clu,kmeans_MDS$party)
+e2<-cluster.entropy(grpSen2$clu,grpSen2$party)
+e3<-cluster.entropy(grpSen3$clu,grpSen3$party)
+e4<-cluster.entropy(grpSen4$clu,grpSen4$party)
+
+entropy<-c(e1,e2,e3,e4)
+```
+
+Generate the summary table
+```{r echo=TRUE,warning=FALSE,tidy=TRUE,message=FALSE}
+result = rbind(purity,entropy)
+result = as.data.frame(result)
+colnames(result) = c("k-means", "hclust-single","hclust-complete","hclust-average")
+
+library(knitr)
+kable(result, caption = 'Summary of Clustering (k=2)')
+```
+
+## 5. Based on your observation on both measures and mis-classified members, choose two clustering methods that generate the most meaningful results and explain why
+Based on the observation and measure table, k-means only have two republican together with democrats and k-means shows the highest purity and lowest entropy. This means the similarity in each of the k-means cluster is very high and difference inside each cluster is very low. Therefore, k-means is the most efficient method here.
+
+However, all results from three variants of hierarchical clustering are showing the same. Therefore,I'm going to increase the k value in order to select the best approach in hclust.
+
+Increase the k value to 3 and check the result.
+```{r echo=TRUE,warning=FALSE,tidy=TRUE}
+hclusterMDS<-function(hc_agg){
+  hc1 = cutree(hc_agg,k=3)
+  hc1<-as.data.frame(hc1)
+  names(hc1)[names(hc1)=="hc1"] <- "cluster"
+  data3 = clusterMDS(hc1)
+  return(data3)
+}
+
+#single link
+hc_s = hclust(sen113_dist,method='single')
+grpSen2<-hclusterMDS(hc_s)
+
+#complete link
+hc_c = hclust(sen113_dist,method='complete')
+grpSen3<-hclusterMDS(hc_c)
+
+#average link
+hc_a = hclust(sen113_dist,method='average')
+grpSen4<-hclusterMDS(hc_a)
+
+p2<-cluster.purity(grpSen2$clu,grpSen2$party)
+p3<-cluster.purity(grpSen3$clu,grpSen3$party)
+p4<-cluster.purity(grpSen4$clu,grpSen4$party)
+
+purity<-c(p2,p3,p4)
+
+e2<-cluster.entropy(grpSen2$clu,grpSen2$party)
+e3<-cluster.entropy(grpSen3$clu,grpSen3$party)
+e4<-cluster.entropy(grpSen4$clu,grpSen4$party)
+
+entropy<-c(e2,e3,e4)
+
+result = rbind(purity,entropy)
+result = as.data.frame(result)
+colnames(result) = c("hclust-single","hclust-complete","hclust-average")
+
+kable(result, caption = 'Summary of Clustering (k=3)')
+```
+
+When I increase the k to 3, the hclustering with single method shows the highest purity and hclustering with complete method shows the lowest entropy. I would like to choose the hclustering with single moethod to be the second most meaningful clustering method for this dataset, since it shows the highest purity and media entropy among the three variants of hclustering method.
+
+In conclusion, k-means and h-clustering with single link are the two method here that generate the most meaningful results.
